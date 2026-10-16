@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RTSP Kanal Sayacı</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #101722; color: #e8eef8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 36px 18px 60px; }
+    main { max-width: 1080px; margin: auto; }
+    header { margin-bottom: 28px; }
+    .eyebrow { color: #67d6c0; text-transform: uppercase; letter-spacing: .18em; font-size: 11px; font-weight: 800; }
+    h1 { font-size: clamp(28px, 4vw, 42px); margin: 9px 0; letter-spacing: -.04em; }
+    p { color: #9daec3; line-height: 1.55; margin: 0; }
+    .panel { background: #192333; border: 1px solid #2b3b50; border-radius: 16px; padding: 24px; box-shadow: 0 18px 55px #0002; }
+    .form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .wide { grid-column: 1 / -1; }
+    label { display: block; color: #b7c7d9; font-size: 13px; font-weight: 650; margin-bottom: 7px; }
+    input { width: 100%; background: #101a28; color: #f0f5fb; border: 1px solid #3b4c63; border-radius: 9px; padding: 12px 13px; font: inherit; outline: none; }
+    input:focus { border-color: #55d6c1; box-shadow: 0 0 0 3px #55d6c126; }
+    .hint { font-size: 12px; margin-top: 7px; }
+    .checks { display: flex; gap: 20px; align-items: center; min-height: 43px; }
+    .checks label { display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; }
+    .checks input { width: auto; accent-color: #61dcc8; }
+    .actions { display: flex; gap: 10px; margin-top: 24px; }
+    button { border: 0; border-radius: 9px; padding: 12px 20px; color: #10242b; background: #67d6c0; font-weight: 800; cursor: pointer; }
+    button:hover { filter: brightness(1.09); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.secondary { background: #35465d; color: #e8eef8; }
+    .error { color: #ff9c9c; margin-top: 13px; min-height: 18px; }
+    .results { margin-top: 20px; }
+    .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+    .stat { background: #172637; border: 1px solid #2b3b50; border-radius: 13px; padding: 16px 18px; }
+    .stat strong { display: block; font-size: 29px; line-height: 1.2; }
+    .stat span { color: #9daec3; font-size: 12px; }
+    .statusline { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 0 0 11px; color: #b7c7d9; font-size: 13px; }
+    progress { width: 100%; height: 7px; accent-color: #67d6c0; margin-bottom: 17px; }
+    .table-wrap { overflow: auto; border: 1px solid #2b3b50; border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #2b3b50; }
+    tr:last-child td { border-bottom: 0; }
+    th { background: #202f42; color: #afc1d5; font-size: 12px; }
+    td.url { font-family: ui-monospace, SFMono-Regular, monospace; overflow-wrap: anywhere; min-width: 300px; color: #a7b9cc; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 6px; background: #384257; color: #cdd7e5; font-weight: 700; }
+    .badge.found { background: #145c50; color: #9dffe5; }
+    .badge.auth, .badge.error, .badge.connection { background: #624034; color: #ffd3b5; }
+    .empty { color: #9daec3; padding: 25px; text-align: center; }
+    .collage { margin-top: 20px; }
+    .collage-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+    .collage h2 { margin: 0; font-size: 19px; }
+    .download { display: inline-block; border-radius: 9px; padding: 10px 16px; color: #10242b; background: #67d6c0; font-weight: 800; text-decoration: none; }
+    .preview { width: 100%; max-height: 660px; object-fit: contain; background: #101722; border: 1px solid #2b3b50; border-radius: 12px; }
+    .capture-errors { margin-top: 14px; color: #b7c7d9; font-size: 13px; }
+    .capture-errors summary { cursor: pointer; }
+    .capture-errors ul { margin: 8px 0 0; padding-left: 20px; }
+    @media (max-width: 700px) { .form-grid { grid-template-columns: repeat(2, 1fr); } .summary { grid-template-columns: 1fr; } .panel { padding: 17px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Yerel ağ aracı</div>
+    <h1>RTSP Kanal Sayacı</h1>
+    <p>Bir RTSP adresinden kanal numaralarını üretir, akışları GStreamer ile doğrular ve bulunan farklı kanalları sayar.</p>
+  </header>
+  <section class="panel">
+    <form id="scan-form">
+      <div class="form-grid">
+        <div class="wide">
+          <label for="url">Örnek RTSP adresi</label>
+          <input id="url" type="text" required autocomplete="off" spellcheck="false" placeholder="rtsp://kullanıcı:şifre@kamera:554/Streaming/Channels/101">
+          <p class="hint">101 biçiminde kanal 1 / ana akış 01 kabul edilir. Özel adresler için yolda <code>{channel}</code> ve <code>{stream}</code> kullanabilirsiniz.</p>
+        </div>
+        <div><label for="start">İlk kanal</label><input id="start" type="number" min="1" max="256" value="1" required></div>
+        <div><label for="end">Son kanal</label><input id="end" type="number" min="1" max="256" value="32" required></div>
+        <div><label for="timeout">Deneme süresi (sn)</label><input id="timeout" type="number" min="2" max="30" value="6" required></div>
+        <div><label for="workers">Eşzamanlı deneme</label><input id="workers" type="number" min="1" max="6" value="3" required></div>
+        <div class="wide">
+          <label>Denenecek akışlar</label>
+          <div class="checks">
+            <label><input id="main-stream" type="checkbox" checked> Ana akış (01)</label>
+            <label><input id="sub-stream" type="checkbox"> Alt akış (02)</label>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="start-button" type="submit">Taramayı başlat</button>
+        <button id="stop-button" class="secondary" type="button" disabled>Durdur</button>
+      </div>
+      <div id="error" class="error" role="alert"></div>
+    </form>
+  </section>
+  <section class="results" aria-live="polite">
+    <div class="summary">
+      <div class="stat"><strong id="found-count">0</strong><span>Bulunan farklı kanal</span></div>
+      <div class="stat"><strong id="completed">0 / 0</strong><span>Tamamlanan deneme</span></div>
+      <div class="stat"><strong id="issues">0</strong><span>Bağlantı / yetki / diğer hata</span></div>
+    </div>
+    <div class="statusline"><span id="status">Tarama başlatılmadı</span><span id="channels"></span></div>
+    <progress id="progress" max="1" value="0"></progress>
+    <div class="table-wrap">
+      <table><thead><tr><th>Kanal</th><th>Akış</th><th>Durum</th><th>Adres</th></tr></thead><tbody id="rows"><tr><td class="empty" colspan="4">Sonuçlar burada görünecek.</td></tr></tbody></table>
+    </div>
+  </section>
+  <section class="panel collage" id="collage-panel" hidden>
+    <div class="collage-head"><h2>Kanal kolajı</h2><a id="download" class="download" href="/api/collage" download="rtsp-kanal-kolaji.jpg" hidden>JPG indir</a></div>
+    <p id="collage-status"></p>
+    <details id="collage-errors" class="capture-errors" hidden><summary id="collage-errors-summary"></summary><ul id="collage-errors-list"></ul></details>
+    <img id="collage-preview" class="preview" alt="Bulunan RTSP kanallarının görüntü kolajı" hidden>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const labels = {found:'Bulundu', missing:'Yok', timeout:'Zaman aşımı', auth:'Yetki hatası', connection:'Bağlantı hatası', error:'Hata'};
+let timer;
+
+async function request(path, body) {
+  const response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', headers: {'Content-Type':'application/json'}, body: body === undefined ? undefined : JSON.stringify(body), cache:'no-store'});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'İstek başarısız');
+  return data;
+}
+
+function render(data) {
+  $('start-button').disabled = data.running || data.collage_running;
+  $('stop-button').disabled = !data.running && !data.collage_running;
+  $('found-count').textContent = data.found_count;
+  $('completed').textContent = `${data.completed} / ${data.total}`;
+  $('issues').textContent = data.results.filter(r => !['found','missing'].includes(r.status)).length;
+  $('status').textContent = data.running ? 'Taranıyor…' : data.cancelled ? 'Tarama durduruldu' : data.total ? 'Tarama tamamlandı' : 'Tarama başlatılmadı';
+  $('channels').textContent = data.found_channels.length ? `Kanallar: ${data.found_channels.join(', ')}` : '';
+  $('progress').max = data.total || 1;
+  $('progress').value = data.completed;
+  if (data.error) $('error').textContent = data.error;
+  $('collage-panel').hidden = !data.collage_running && !data.collage_ready && !data.collage_error;
+  $('collage-status').textContent = data.collage_running
+    ? `Görüntüler hazırlanıyor: ${data.collage_completed} / ${data.collage_total}; alınan kare: ${data.collage_captured || 0}`
+    : data.collage_error || (data.collage_ready ? `${data.collage_captured} / ${data.collage_total} kare alındı. Kolaj indirilmeye hazır.` : '');
+  const failures = data.collage_failures || [];
+  $('collage-errors').hidden = failures.length === 0;
+  $('collage-errors-summary').textContent = `${failures.length} kanalın görüntüsü alınamadı`;
+  const errorList = $('collage-errors-list'); errorList.replaceChildren();
+  for (const failure of failures) { const item = document.createElement('li'); item.textContent = `Kanal ${failure.channel}: ${failure.reason}`; errorList.append(item); }
+  $('download').hidden = !data.collage_ready;
+  $('collage-preview').hidden = !data.collage_ready;
+  if (data.collage_ready && !$('collage-preview').getAttribute('src')) $('collage-preview').src = '/api/collage-preview';
+  if (!data.collage_ready) $('collage-preview').removeAttribute('src');
+  const rows = $('rows');
+  rows.replaceChildren();
+  if (!data.results.length) {
+    const tr = rows.insertRow(); const td = tr.insertCell(); td.colSpan = 4; td.className = 'empty'; td.textContent = 'Sonuçlar burada görünecek.';
+  } else {
+    for (const r of [...data.results].sort((a,b) => a.channel - b.channel || a.stream - b.stream)) {
+      const tr = rows.insertRow();
+      tr.insertCell().textContent = r.channel;
+      tr.insertCell().textContent = r.stream === 1 ? 'Ana (01)' : 'Alt (02)';
+      const badge = document.createElement('span'); badge.className = `badge ${r.status}`; badge.textContent = labels[r.status] || r.status;
+      tr.insertCell().append(badge);
+      const urlCell = tr.insertCell(); urlCell.className = 'url'; urlCell.textContent = r.url;
+    }
+  }
+  clearTimeout(timer);
+  if (data.running || data.collage_running) timer = setTimeout(refresh, 700);
+}
+
+async function refresh() {
+  try { render(await request('/api/status')); }
+  catch (error) { $('error').textContent = error.message; timer = setTimeout(refresh, 2000); }
+}
+
+$('scan-form').addEventListener('submit', async event => {
+  event.preventDefault(); $('error').textContent = '';
+  const streams = [1,2].filter(n => $(n === 1 ? 'main-stream' : 'sub-stream').checked);
+  try {
+    await request('/api/start', {url:$('url').value, start:+$('start').value, end:+$('end').value, timeout:+$('timeout').value, workers:+$('workers').value, streams});
+    refresh();
+  } catch (error) { $('error').textContent = error.message; }
+});
+$('stop-button').addEventListener('click', async () => { try { await request('/api/stop', {}); refresh(); } catch (error) { $('error').textContent = error.message; } });
+refresh();
+</script>
+</body>
+</html>
